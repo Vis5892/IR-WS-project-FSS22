@@ -15,6 +15,7 @@ def compute(data, column_passage, column_query):
     ), columns=vectorizer_passages.get_feature_names())
     data = compute_LM(data, df_passages, column_query)
     data = compute_VSM(data, df_passages, column_query)
+    data = compute_Jaccard(data, column_passage, column_query)
     return data
 
 
@@ -56,6 +57,17 @@ def compute_VSM(data, df_passages, column_query):
         cos = cosine_similarity(qarray, parray)
         data['VSM'].loc[line] = cos[0][0]
     return data
+
+def compute_Jaccard(data, column_passage, column_query):
+
+    data['Jaccard'] = data.apply(lambda row: jaccard_sim(row[column_passage],row[column_query]),axis=1)
+    return data
+
+def jaccard_sim(passage, query):
+    intersection = set(query).intersection(set(passage))
+    union = set(query).union(set(passage))
+    return len(intersection) / len(union)
+
 # path = r'C:\Users\timja\OneDrive\Dokumente\Master_Uni_Mannheim\Semester_3\Information_Retrieval\top1000.dev'
 
 # data = pd.read_csv(path, sep='\t', header=None, names=['qid', 'pid', 'query', 'passage'])
