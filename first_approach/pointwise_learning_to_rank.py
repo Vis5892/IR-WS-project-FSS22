@@ -5,11 +5,25 @@ from compute_LM_VSM import compute
 from sklearn.metrics import average_precision_score
 from sklearn import svm
 from sklearn.tree import DecisionTreeClassifier
+from imblearn.under_sampling import RandomUnderSampler
+from imblearn.over_sampling import RandomOverSampler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+
 import tarfile
 import gzip
 
 
+def calculateMRR10(list, id):
+    result = 0
+    for i in range(len(list)):
+        if(list[i] == id):
+            result = 1/(i+1)
+            return result
+    return result
+
 # paths
+
 
 path_collection_tsv = "collection.tsv"
 path_queries_train_tsv = "queries.train.tsv"
@@ -34,7 +48,7 @@ with open(path_queries_train_tsv, 'r', encoding='utf8') as file:
         queries[qid] = query
 print('Loading queries finished')
 
-max_training_queries = 1000
+max_training_queries = 100
 max_negative_queries = 5
 # Key is a query and value the amount of negative passages
 negative_queries = {}
@@ -66,16 +80,16 @@ with open(path_qid_pid_tsv, 'rt') as file:
 
 counter = 0
 
-with open(path_qrels_train_tsv, 'rt') as file:
-    for line in file:
-        qid, zero, pass_id, rel = line.strip().split()
+# with open(path_qrels_train_tsv, 'rt') as file:
+#     for line in file:
+#         qid, zero, pass_id, rel = line.strip().split()
 
-        if max_training_queries == counter:
-            break
-        training_data.append(
-            [qid, pass_id, queries[qid], corpus[pass_id], 1])
-        counter += 1
-        training_queries.append(qid)
+#         if max_training_queries == counter:
+#             break
+#         training_data.append(
+#             [qid, pass_id, queries[qid], corpus[pass_id], 1])
+#         counter += 1
+#         training_queries.append(qid)
 
 print('Loading training data finished')
 df = pd.DataFrame(training_data, columns=[
@@ -101,20 +115,77 @@ x_train, x_valid = train_test_split(
 
 y_train = x_train['label']
 x_train = x_train[['VSM', 'LM']]
+# rus = RandomUnderSampler()
+# x_res, y_res = rus.fit_resample(x_train, y_train)
+# print(x_res)
+# print(y_res)
+# print(y_res.value_counts())
 
 y_valid = x_valid['label']
 x_valid = x_valid[['VSM', 'LM']]
-
-mnb = MultinomialNB()
+print("MULTI")
+mnb = MultinomialNB(alpha=0.5, class_prior=[0.1, 0.9])
 mnb.fit(x_train, y_train)
-
 # Predict labels and print AP
 predict = mnb.predict(x_valid)
 merged = x_valid.copy()
 merged["predict"] = predict
+merged["valid"] = y_valid
+merged.reset_index(inplace=True)
+probabilities = mnb.predict_proba(x_valid)
+probabilities_df = pd.DataFrame(
+    probabilities, columns=['probability_class1', 'probability_class2'])
+print(probabilities_df['probability_class1'])
+merged["probability"] = probabilities_df['probability_class1']
+print(merged.loc[merged["predict"] == 0])
 print("Predictions")
 print(merged.loc[merged["predict"] == 1])
+print(merged.loc[merged["predict"] == 0])
 print(average_precision_score(y_valid, predict))
+
+rus = RandomUnderSampler()
+x_rus, y_rus = rus.fit_resample(x_train, y_train)
+
+print("TREE")
+tree = DecisionTreeClassifier()
+tree.fit(x_train, y_train)
+# Predict labels and print AP
+predict = tree.predict(x_valid)
+merged = x_valid.copy()
+merged["predict"] = predict
+merged["valid"] = y_valid
+merged.reset_index(inplace=True)
+probabilities = tree.predict_proba(x_valid)
+probabilities_df = pd.DataFrame(
+    probabilities, columns=['probability_class1', 'probability_class2'])
+print(probabilities_df['probability_class1'])
+merged["probability"] = probabilities_df['probability_class1']
+print(merged.loc[merged["predict"] == 0])
+print("Predictions")
+print(merged.loc[merged["predict"] == 1])
+print(merged.loc[merged["predict"] == 0])
+print(average_precision_score(y_valid, predict))
+
+print("KN")
+kn = KNeighborsClassifier()
+kn.fit(x_train, y_train)
+# Predict labels and print AP
+predict = kn.predict(x_valid)
+merged = x_valid.copy()
+merged["predict"] = predict
+merged["valid"] = y_valid
+merged.reset_index(inplace=True)
+probabilities = kn.predict_proba(x_valid)
+probabilities_df = pd.DataFrame(
+    probabilities, columns=['probability_class1', 'probability_class2'])
+print(probabilities_df['probability_class1'])
+merged["probability"] = probabilities_df['probability_class1']
+print(merged.loc[merged["predict"] == 0])
+print("Predictions")
+print(merged.loc[merged["predict"] == 1])
+print(merged.loc[merged["predict"] == 0])
+print(average_precision_score(y_valid, predict))
+
 
 # svc = svm.SVC(probability=True)
 # svc.fit(x_train, y_train)
