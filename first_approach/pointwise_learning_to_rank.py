@@ -1,3 +1,4 @@
+from unittest import skip
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
@@ -9,7 +10,8 @@ from imblearn.under_sampling import RandomUnderSampler
 from imblearn.over_sampling import RandomOverSampler
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
-
+from sklearn.model_selection import GridSearchCV
+import joblib
 import tarfile
 import gzip
 
@@ -48,35 +50,38 @@ with open(path_queries_train_tsv, 'r', encoding='utf8') as file:
         queries[qid] = query
 print('Loading queries finished')
 
-max_training_queries = 100
-max_negative_queries = 5
+max_training_queries = 1000
+max_negative_queries = 20
 # Key is a query and value the amount of negative passages
 negative_queries = {}
 training_queries = []
 counter = 0
 training_data = []
-
+skip_lines = 0
 with open(path_qid_pid_tsv, 'rt') as file:
     for line in file:
-        qid, pos_id, neg_id = line.strip().split()
+        if(skip_lines > 10):
+            qid, pos_id, neg_id = line.strip().split()
 
-        if max_training_queries == counter:
-            break
-        if qid not in training_queries:
-            training_data.append(
-                [qid, pos_id, queries[qid], corpus[pos_id], 1])
-            training_data.append(
-                [qid, neg_id, queries[qid], corpus[neg_id], 0])
-            counter += 1
-            negative_queries[qid] = 1
-            training_queries.append(qid)
-        else:
-            training_data.append(
-                [qid, pos_id, queries[qid], corpus[pos_id], 1])
-            if(negative_queries[qid] < max_negative_queries):
+            if max_training_queries == counter:
+                break
+            if qid not in training_queries:
+                training_data.append(
+                    [qid, pos_id, queries[qid], corpus[pos_id], 1])
                 training_data.append(
                     [qid, neg_id, queries[qid], corpus[neg_id], 0])
-                negative_queries[qid] = negative_queries[qid] + 1
+                counter += 1
+                negative_queries[qid] = 1
+                training_queries.append(qid)
+            else:
+                training_data.append(
+                    [qid, pos_id, queries[qid], corpus[pos_id], 1])
+                if(negative_queries[qid] < max_negative_queries):
+                    training_data.append(
+                        [qid, neg_id, queries[qid], corpus[neg_id], 0])
+                    negative_queries[qid] = negative_queries[qid] + 1
+        else:
+            skip_lines += 1
 
 counter = 0
 
@@ -106,7 +111,7 @@ df = compute(df, 'passage', 'query')
 
 print(df[0:1].to_string())
 
-ml_data = df[['VSM', 'LM', 'label']]
+ml_data = df[['VSM', 'LM', 'Jaccard', 'label']]
 
 print(ml_data.head())
 
@@ -114,77 +119,88 @@ x_train, x_valid = train_test_split(
     ml_data, test_size=0.2, random_state=453, stratify=ml_data['label'])
 
 y_train = x_train['label']
-x_train = x_train[['VSM', 'LM']]
+x_train = x_train[['VSM', 'LM', 'Jaccard']]
 # rus = RandomUnderSampler()
 # x_res, y_res = rus.fit_resample(x_train, y_train)
 # print(x_res)
 # print(y_res)
 # print(y_res.value_counts())
-
-y_valid = x_valid['label']
-x_valid = x_valid[['VSM', 'LM']]
-print("MULTI")
-mnb = MultinomialNB(alpha=0.5, class_prior=[0.1, 0.9])
-mnb.fit(x_train, y_train)
-# Predict labels and print AP
-predict = mnb.predict(x_valid)
-merged = x_valid.copy()
-merged["predict"] = predict
-merged["valid"] = y_valid
-merged.reset_index(inplace=True)
-probabilities = mnb.predict_proba(x_valid)
-probabilities_df = pd.DataFrame(
-    probabilities, columns=['probability_class1', 'probability_class2'])
-print(probabilities_df['probability_class1'])
-merged["probability"] = probabilities_df['probability_class1']
-print(merged.loc[merged["predict"] == 0])
-print("Predictions")
-print(merged.loc[merged["predict"] == 1])
-print(merged.loc[merged["predict"] == 0])
-print(average_precision_score(y_valid, predict))
-
 rus = RandomUnderSampler()
 x_rus, y_rus = rus.fit_resample(x_train, y_train)
+y_valid = x_valid['label']
+x_valid = x_valid[['VSM', 'LM', 'Jaccard']]
+print("MULTI")
+mnb = MultinomialNB()
+# mnb.fit(x_rus, y_rus)
+# # Predict labels and print AP
+# predict = mnb.predict(x_valid)
+# merged = x_valid.copy()
+# merged["predict"] = predict
+# merged["valid"] = y_valid
+# merged.reset_index(inplace=True)
+# probabilities = mnb.predict_proba(x_valid)
+# probabilities_df = pd.DataFrame(
+#     probabilities, columns=['probability_class1', 'probability_class2'])
+# print(probabilities_df['probability_class1'])
+# merged["probability"] = probabilities_df['probability_class1']
+# print(merged.loc[merged["predict"] == 0])
+# print("Predictions")
+# print(merged.loc[merged["predict"] == 1])
+# print(merged.loc[merged["predict"] == 0])
+# print(average_precision_score(y_valid, predict))
 
 print("TREE")
-tree = DecisionTreeClassifier()
-tree.fit(x_train, y_train)
-# Predict labels and print AP
-predict = tree.predict(x_valid)
-merged = x_valid.copy()
-merged["predict"] = predict
-merged["valid"] = y_valid
-merged.reset_index(inplace=True)
-probabilities = tree.predict_proba(x_valid)
-probabilities_df = pd.DataFrame(
-    probabilities, columns=['probability_class1', 'probability_class2'])
-print(probabilities_df['probability_class1'])
-merged["probability"] = probabilities_df['probability_class1']
-print(merged.loc[merged["predict"] == 0])
-print("Predictions")
-print(merged.loc[merged["predict"] == 1])
-print(merged.loc[merged["predict"] == 0])
-print(average_precision_score(y_valid, predict))
+# param_search = {
+#     'max_features': ['auto', "sqrt", "log2"],
+#     'max_depth': [5, 15, 25, 35, 45]}
+param_search = {
+    'alpha': [0.0, 0.25, 0.5, 0.75, 1.0]}
+tree = DecisionTreeClassifier(max_depth=5, max_features="auto")
 
-print("KN")
-kn = KNeighborsClassifier()
-kn.fit(x_train, y_train)
-# Predict labels and print AP
-predict = kn.predict(x_valid)
-merged = x_valid.copy()
-merged["predict"] = predict
-merged["valid"] = y_valid
-merged.reset_index(inplace=True)
-probabilities = kn.predict_proba(x_valid)
-probabilities_df = pd.DataFrame(
-    probabilities, columns=['probability_class1', 'probability_class2'])
-print(probabilities_df['probability_class1'])
-merged["probability"] = probabilities_df['probability_class1']
-print(merged.loc[merged["predict"] == 0])
-print("Predictions")
-print(merged.loc[merged["predict"] == 1])
-print(merged.loc[merged["predict"] == 0])
-print(average_precision_score(y_valid, predict))
+gscv = GridSearchCV(mnb, param_grid=param_search,
+                    scoring="average_precision", cv=5)
+gscv.fit(x_rus, y_rus)
+best_score = gscv.best_score_
+best_model = gscv.best_estimator_
+print(best_score)
+print(best_model)
+joblib.dump(best_model, 'filenameMNB.pkl')
+# tree.fit(x_rus, y_rus),
+# predict = tree.predict(x_valid)
+# merged = x_valid.copy()
+# merged["predict"] = predict
+# merged["valid"] = y_valid
+# merged.reset_index(inplace=True)
+# probabilities = tree.predict_proba(x_valid)
+# probabilities_df = pd.DataFrame(
+#     probabilities, columns=['probability_class1', 'probability_class2'])
+# print(probabilities_df['probability_class1'])
+# merged["probability"] = probabilities_df['probability_class1']
+# print(merged.loc[merged["predict"] == 0])
+# print("Predictions")
+# print(merged.loc[merged["predict"] == 1])
+# print(merged.loc[merged["predict"] == 0])
+# print(average_precision_score(y_valid, predict))
+
+# print("KN")
+# kn = KNeighborsClassifier()
+# kn.fit(x_rus, y_rus)
+# # Predict labels and print AP
+# predict = kn.predict(x_valid)
+# merged = x_valid.copy()
+# merged["predict"] = predict
+# merged["valid"] = y_valid
+# merged.reset_index(inplace=True)
+# probabilities = kn.predict_proba(x_valid)
+# probabilities_df = pd.DataFrame(
+#     probabilities, columns=['probability_class1', 'probability_class2'])
+# print(probabilities_df['probability_class1'])
+# merged["probability"] = probabilities_df['probability_class1']
+# print(merged.loc[merged["predict"] == 0])
+# print("Predictions")
+# print(merged.loc[merged["predict"] == 1])
+# print(merged.loc[merged["predict"] == 0])
+# print(average_precision_score(y_valid, predict))
 
 
 # svc = svm.SVC(probability=True)
