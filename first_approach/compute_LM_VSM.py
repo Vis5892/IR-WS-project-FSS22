@@ -4,7 +4,11 @@ import pandas as pd
 import numpy as np
 
 
+# function for computing features for Learning to Rank 
+# returns data frame with computed features
+
 def compute(data, column_passage, column_query):
+    
     # create tfidf of passages
     vectorizer_passages = TfidfVectorizer()
     vectorizer_passages.fit(data[column_passage])
@@ -18,6 +22,7 @@ def compute(data, column_passage, column_query):
     data = compute_Jaccard(data, column_passage, column_query)
     return data
 
+# function for computing the Language Model
 
 def compute_LM(data, df_passages, column_query):
     # laplace smoother value for 0 values
@@ -40,6 +45,7 @@ def compute_LM(data, df_passages, column_query):
 
     return data
 
+# function for computing the Vector Space Model
 
 def compute_VSM(data, df_passages, column_query):
     for line in range(len(df_passages)):
@@ -58,6 +64,8 @@ def compute_VSM(data, df_passages, column_query):
         data['VSM'].loc[line] = cos[0][0]
     return data
 
+# functions for calculating the Jaccard similarity between passage and query 
+
 def compute_Jaccard(data, column_passage, column_query):
 
     data['Jaccard'] = data.apply(lambda row: jaccard_sim(row[column_passage],row[column_query]),axis=1)
@@ -67,11 +75,3 @@ def jaccard_sim(passage, query):
     intersection = set(query).intersection(set(passage))
     union = set(query).union(set(passage))
     return len(intersection) / len(union)
-
-# path = r'C:\Users\timja\OneDrive\Dokumente\Master_Uni_Mannheim\Semester_3\Information_Retrieval\top1000.dev'
-
-# data = pd.read_csv(path, sep='\t', header=None, names=['qid', 'pid', 'query', 'passage'])
-# datashortend = data.loc[0:9999]
-# datashortend['LM'] = 1
-# df = compute(datashortend, 'passage', 'query')
-# print(df.head())
