@@ -23,6 +23,8 @@ from nltk.stem import PorterStemmer
 import string
 
 
+# function for calculating the MRR10
+
 def calculateMRR10(list, id):
     result = 0
     for i in range(len(list)):
@@ -31,14 +33,15 @@ def calculateMRR10(list, id):
             return result
     return result
 
-# paths
-
+# paths of the data files used
 
 path_collection_tsv = "collection.tsv"
 path_queries_train_tsv = "queries.train.tsv"
 path_qid_pid_tsv = "qidpidtriples.train.full.2.tsv"
 path_qrels_train_tsv = "qrels.train.tsv"
 path_top1000 = "top1000.dev"
+
+# Load corpus of passages
 
 corpus = {}
 
@@ -49,6 +52,8 @@ with open(path_collection_tsv, 'r', encoding='utf8') as file:
 
 print('Loading corpus finished')
 
+# Load queries 
+
 queries = {}
 
 with open(path_queries_train_tsv, 'r', encoding='utf8') as file:
@@ -57,8 +62,12 @@ with open(path_queries_train_tsv, 'r', encoding='utf8') as file:
         queries[qid] = query
 print('Loading queries finished')
 
-max_training_queries = 1000
-max_negative_queries = 20
+
+# Load training data out of qid_pid
+
+max_training_queries = 1000    # training queries used
+max_negative_queries = 20      # amount of negative passages related to query for training data 
+
 # Key is a query and value the amount of negative passages
 negative_queries = {}
 training_queries = []
@@ -91,19 +100,9 @@ with open(path_qid_pid_tsv, 'rt') as file:
             skip_lines += 1
 
 counter = 0
-
-# with open(path_qrels_train_tsv, 'rt') as file:
-#     for line in file:
-#         qid, zero, pass_id, rel = line.strip().split()
-
-#         if max_training_queries == counter:
-#             break
-#         training_data.append(
-#             [qid, pass_id, queries[qid], corpus[pass_id], 1])
-#         counter += 1
-#         training_queries.append(qid)
-
 print('Loading training data finished')
+
+# create dataframe for training data 
 df = pd.DataFrame(training_data, columns=[
                   'qid', 'pid', 'query', 'passage', 'label'])
 
@@ -120,9 +119,12 @@ print(df.head())
 # placeholder for columns
 df['LM'] = 1
 df['VSM'] = 1
+df['Jaccard'] = 1
 df = compute(df, 'passage', 'query')
 
 print(df[0:1].to_string())
+
+# create machine learning dataframe
 
 ml_data = df[['VSM', 'LM', 'Jaccard', 'label']]
 
