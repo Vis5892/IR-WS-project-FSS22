@@ -13,7 +13,13 @@ from sklearn.model_selection import GridSearchCV
 import joblib
 import tarfile
 import gzip
-
+import nltk
+nltk.download('punkt')
+nltk.download('stopwords')
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import PorterStemmer
+import string
 
 def calculateMRR10(list, id):
     result = 0
@@ -103,6 +109,10 @@ for t_query in training_queries:
     print('Loading training data finished')
     df = pd.DataFrame(training_data[t_query], columns=[
         'qid', 'pid', 'query', 'passage', 'label'])
+    # preprocessing 
+    stop = stopwords.words('english')
+    df['passage'] = df['passage'].apply(lambda x: ' '.join([word for word in x.split() if word not in (stop)]))
+    df['passage'] = df['passage']. apply(lambda x: x.translate(str.maketrans('', '', string.punctuation)))
     df.drop_duplicates(inplace=True)
     df.reset_index(inplace=True)
     print(df.shape)
